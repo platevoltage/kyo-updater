@@ -3,7 +3,49 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { spawn } from 'child_process'
+import { SerialPort } from 'serialport'
+import { ReadlineParser } from '@serialport/parser-readline'
 
+async function listPorts(): Promise<any[]> {
+  const ports = await SerialPort.list()
+  return new Promise((resolve, reject): void => {
+    const portsFiltered = ports.filter((port) => port.vendorId === '303a')
+    for (const _port of portsFiltered) {
+      console.log(_port)
+      const port = new SerialPort({
+        path: _port.path, // e.g., COM3 on Windows
+        baudRate: 115200
+      })
+      port.on('open', () => {
+        console.log('Serial port opened')
+        const parser = port.pipe(new ReadlineParser({ delimiter: '\n' }))
+        // Send a string to the Arduino
+        port.write('KYOping\n', (err) => {
+          if (err) {
+            console.error('Error writing to serial:', err.message)
+          } else {
+            console.log('Sent: hello')
+          }
+        })
+
+        parser.on('data', (data) => {
+          if (data.trim().includes('KYO')) {
+            console.log('Received:', data.trim())
+            port.close((err) => console.log())
+            resolve({ port: _port, data: data.trim() })
+          }
+        })
+
+        setTimeout(() => {
+          port.close((err) => console.log())
+        }, 5000)
+      })
+    }
+    setTimeout(() => {
+      reject(new Error('No Device found'))
+    }, 10000)
+  })
+}
 function flashESP(portPath: string, firmwarePath: string): Promise<void> {
   return new Promise((resolve, reject): void => {
     const esptool = 'esptool.py' // or path to bundled binary
@@ -95,8 +137,11 @@ app.whenReady().then(async () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
 
-  await flashESP('/dev/cu.usbmodem211401', join(__dirname, 'firmware', 'firmware.bin'))
-  await flashLittleFS('/dev/cu.usbmodem211401', join(__dirname, 'firmware', 'littlefs.bin'))
+  const data = await listPorts()
+  console.log(data)
+  await flashLittleFS(data.port.path, join(__dirname, 'firmware', 'littlefs.bin'))
+  await flashESP(data.port.path, join(__dirname, 'firmware', 'firmware.bin'))
+  console.log('SUCCESS')
 })
 
 // Quit when all windows are closed, except on macOS. There, it's common
