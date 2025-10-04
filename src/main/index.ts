@@ -6,10 +6,34 @@ import { spawn } from 'child_process'
 import { SerialPort } from 'serialport'
 import { ReadlineParser } from '@serialport/parser-readline'
 
+function getEsptoolPath() {
+  const basePath = app.isPackaged
+    ? join(process.resourcesPath, 'app.asar.unpacked', 'resources', 'esptool')
+    : join(__dirname, '../../resources/esptool')
+
+  return process.platform === 'win32' ? join(basePath, 'esptool.exe') : join(basePath, 'esptool')
+}
+
+function getFirmwarePath() {
+  const basePath = app.isPackaged
+    ? join(process.resourcesPath, 'app.asar.unpacked', 'resources', 'firmware')
+    : join(__dirname, '../../resources/firmware')
+
+  return basePath
+}
+
+const esptool = getEsptoolPath()
+const firmwarePath = getFirmwarePath()
+console.log('ESPTOOL', esptool)
+console.log('FIRMWARE', firmwarePath)
+
 async function listPorts(): Promise<any[]> {
   const ports = await SerialPort.list()
+  console.log(ports)
   return new Promise((resolve, reject): void => {
-    const portsFiltered = ports.filter((port) => port.vendorId === '303a')
+    const x = ''
+    x.toUpperCase()
+    const portsFiltered = ports.filter((port) => port.vendorId?.toUpperCase() === '303A')
     for (const _port of portsFiltered) {
       console.log(_port)
       const port = new SerialPort({
@@ -46,9 +70,9 @@ async function listPorts(): Promise<any[]> {
     }, 10000)
   })
 }
+
 function flashESP(mainWindow, portPath: string, firmwarePath: string): Promise<void> {
   return new Promise((resolve, reject): void => {
-    const esptool = 'esptool.py' // or path to bundled binary
     const args = ['-p', portPath, 'write_flash', '0x10000', firmwarePath]
 
     const proc = spawn(esptool, args)
@@ -71,7 +95,6 @@ function flashESP(mainWindow, portPath: string, firmwarePath: string): Promise<v
 
 function flashLittleFS(mainWindow, portPath: string, imagePath: string): Promise<void> {
   return new Promise((resolve, reject): void => {
-    const esptool = 'esptool.py' // or path to bundled binary
     const args = ['-p', portPath, 'write_flash', '0x670000', imagePath]
 
     const proc = spawn(esptool, args)
@@ -154,8 +177,8 @@ app.whenReady().then(async () => {
   ipcMain.on('flash', async () => {
     const data = await listPorts()
     console.log(data)
-    await flashLittleFS(mainWindow, data.port.path, join(__dirname, 'firmware', 'littlefs.bin'))
-    await flashESP(mainWindow, data.port.path, join(__dirname, 'firmware', 'firmware.bin'))
+    await flashLittleFS(mainWindow, data.port.path, join(firmwarePath, 'littlefs.bin'))
+    await flashESP(mainWindow, data.port.path, join(firmwarePath, 'firmware.bin'))
     console.log('SUCCESS')
   })
 })

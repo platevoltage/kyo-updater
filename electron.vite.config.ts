@@ -11,7 +11,7 @@ export default defineConfig({
       viteStaticCopy({
         targets: [
           {
-            src: path.resolve(__dirname, 'firmware'), // source folder
+            src: path.resolve(__dirname, 'resources'), // source folder
             dest: '' // copy to root of out folder
           }
         ]
