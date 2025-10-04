@@ -46,15 +46,21 @@ async function listPorts(): Promise<any[]> {
     }, 10000)
   })
 }
-function flashESP(portPath: string, firmwarePath: string): Promise<void> {
+function flashESP(mainWindow, portPath: string, firmwarePath: string): Promise<void> {
   return new Promise((resolve, reject): void => {
     const esptool = 'esptool.py' // or path to bundled binary
     const args = ['-p', portPath, 'write_flash', '0x10000', firmwarePath]
 
     const proc = spawn(esptool, args)
 
-    proc.stdout.on('data', (d) => console.log(d.toString()))
-    proc.stderr.on('data', (d) => console.error(d.toString()))
+    proc.stdout.on('data', (d) => {
+      console.log(d.toString())
+      mainWindow?.webContents.send('stdout', d.toString())
+    })
+    proc.stderr.on('data', (d) => {
+      console.error(d.toString())
+      mainWindow?.webContents.send('sterr', d.toString())
+    })
 
     proc.on('close', (code) => {
       if (code === 0) resolve()
@@ -63,15 +69,21 @@ function flashESP(portPath: string, firmwarePath: string): Promise<void> {
   })
 }
 
-function flashLittleFS(portPath: string, imagePath: string): Promise<void> {
+function flashLittleFS(mainWindow, portPath: string, imagePath: string): Promise<void> {
   return new Promise((resolve, reject): void => {
     const esptool = 'esptool.py' // or path to bundled binary
     const args = ['-p', portPath, 'write_flash', '0x670000', imagePath]
 
     const proc = spawn(esptool, args)
 
-    proc.stdout.on('data', (d) => console.log(d.toString()))
-    proc.stderr.on('data', (d) => console.error(d.toString()))
+    proc.stdout.on('data', (d) => {
+      console.log(d.toString())
+      mainWindow?.webContents.send('stdout', d.toString())
+    })
+    proc.stderr.on('data', (d) => {
+      console.error(d.toString())
+      mainWindow?.webContents.send('sterr', d.toString())
+    })
 
     proc.on('close', (code) => {
       if (code === 0) resolve()
@@ -80,7 +92,7 @@ function flashLittleFS(portPath: string, imagePath: string): Promise<void> {
   })
 }
 
-function createWindow(): void {
+function createWindow(): BrowserWindow {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
     width: 900,
@@ -110,6 +122,8 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
+
+  return mainWindow
 }
 
 // This method will be called when Electron has finished
@@ -129,7 +143,7 @@ app.whenReady().then(async () => {
   // IPC test
   ipcMain.on('ping', () => console.log('pong'))
 
-  createWindow()
+  const mainWindow = createWindow()
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the
@@ -137,11 +151,13 @@ app.whenReady().then(async () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
 
-  const data = await listPorts()
-  console.log(data)
-  await flashLittleFS(data.port.path, join(__dirname, 'firmware', 'littlefs.bin'))
-  await flashESP(data.port.path, join(__dirname, 'firmware', 'firmware.bin'))
-  console.log('SUCCESS')
+  ipcMain.on('flash', async () => {
+    const data = await listPorts()
+    console.log(data)
+    await flashLittleFS(mainWindow, data.port.path, join(__dirname, 'firmware', 'littlefs.bin'))
+    await flashESP(mainWindow, data.port.path, join(__dirname, 'firmware', 'firmware.bin'))
+    console.log('SUCCESS')
+  })
 })
 
 // Quit when all windows are closed, except on macOS. There, it's common
